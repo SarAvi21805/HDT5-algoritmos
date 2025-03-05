@@ -15,14 +15,14 @@ waiting = simpy.Store(env)
 
 #Variables para la ram disponible, la cantidad de procesos a hacer y cuantas instrucciones se ejecutan en running
 RAM_CAPACITY = 100
-NUM_PROCESS = 10
+NUM_PROCESS = 200
 EJECUTED_INSTRUCTIONS = 3
 
 #Container para la ram - Este es un recurso compartido que puede se usado entre procesos
 ram = simpy.Container(env, init=RAM_CAPACITY, capacity=RAM_CAPACITY)
 
 #Recurso para limitar la ejecucion de procesos
-cpu = simpy.Resource(env, capacity=1)
+cpu = simpy.Resource(env, capacity=2)
 
 
 class Process:
@@ -66,8 +66,9 @@ class Process:
                     #Pasa a waiting
                     if option == 1:
                         print(f"El proceso {self.name} esta esperando una operacion I/O en el tiempo {self.env.now}")
-                        waiting.put(self)
+                        cpu.release(req)
                         yield self.env.timeout(2) #Simulación de retraso
+                        waiting.put(self)
                         print(f"El proceso {self.name} paso de 'waiting' a 'ready' en el tiempo {self.env.now}")
                         yield waiting.get()
                         yield ready.put(self)
@@ -92,7 +93,7 @@ def createProcess(env):
 
 #Iniciar la simulación
 env.process(createProcess(env))
-env.run(until=50)
+env.run(until=50000000000000)
 
 
 
