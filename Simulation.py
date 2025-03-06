@@ -3,7 +3,7 @@
 # Fecha de creación: 4/03/2025
 
 import simpy, random
-
+import numpy as np
 
 env = simpy.Environment()
 #Semilla random para obtener los mismos resultados
@@ -15,15 +15,15 @@ waiting = simpy.Store(env)
 
 #Variables para la ram disponible, la cantidad de procesos a hacer y cuantas instrucciones se ejecutan en running
 RAM_CAPACITY = 100
-NUM_PROCESS = 200
+NUM_PROCESS = 25
 EJECUTED_INSTRUCTIONS = 3
-
-#Container para la ram - Este es un recurso compartido que puede se usado entre procesos
+INTERVAL = 10.0
 ram = simpy.Container(env, init=RAM_CAPACITY, capacity=RAM_CAPACITY)
 
 #Recurso para limitar la ejecucion de procesos
 cpu = simpy.Resource(env, capacity=2)
 
+execution_times = []  # List to store execution times
 
 class Process:
     def __init__(self, name, ramOcupped, instructions, env):
@@ -31,10 +31,12 @@ class Process:
         self.name = name
         self.ramOcupped = ramOcupped
         self.instructions = instructions
+        self.start_time = None  # Track start time
+        self.end_time = None    # Track end time
         self.action = env.process(self.runEnv())
 
     def runEnv(self):
-        #El proceso se crea y se agrega a la cola
+        global execution_times
         print(f"El proceso {self.name} llegó a la cola 'new' en el tiempo {self.env.now}")
         new.put(self)
         #Mientras no haya ram suficiente el proceso se mantendrá en la cola
@@ -49,14 +51,14 @@ class Process:
         yield ready.put(pr)
         print(f"El proceso {self.name} se movió de 'new' a 'ready' en el tiempo {self.env.now}")
 
-        yield env.process(self.excecuteInstructions()) #Ejecución de instrucciones
+        self.start_time = self.env.now  # Record start time
+        yield env.process(self.excecuteInstructions())
 
     #Función para la ejecución de instrucciones
     def excecuteInstructions(self):
         while self.instructions > 0:
             with cpu.request() as req:
-                yield req #Espera hasta que el CPU este libre
-                #El proceso pasa a ejecución y se le restan las instrucciones ejecutadas
+                yield req
                 print(f"El proceso {self.name} esta ejecutandose en el tiempo {self.env.now}")
                 yield self.env.timeout(1)
                 self.instructions -= EJECUTED_INSTRUCTIONS
@@ -67,7 +69,7 @@ class Process:
                     if option == 1:
                         print(f"El proceso {self.name} esta esperando una operacion I/O en el tiempo {self.env.now}")
                         cpu.release(req)
-                        yield self.env.timeout(2) #Simulación de retraso
+                        yield self.env.timeout(2)
                         waiting.put(self)
                         print(f"El proceso {self.name} paso de 'waiting' a 'ready' en el tiempo {self.env.now}")
                         yield waiting.get()
@@ -78,7 +80,10 @@ class Process:
                         ready.put(self)
                 #Cuando termine las instrucciones por hacer
                 else:
-                    yield ram.put(self.ramOcupped) #Devuelve la ram ocupada
+                    yield ram.put(self.ramOcupped)
+                    self.end_time = self.env.now  # Record end time
+                    execution_time = self.end_time - self.start_time  # Calculate execution time
+                    execution_times.append(execution_time)  # Store execution time
                     print(f"El proceso {self.name} terminó y devolvió {self.ramOcupped} de ram en el tiempo {self.env.now}")
 
 
@@ -88,12 +93,16 @@ def createProcess(env):
         #Crear un proceso que consuma entre 1 y 10 de ram
         name = "Process" + str(i)
         ramOc = random.randint(1,10)
-        process = Process(name, ramOc, ramOc,env)
-        yield env.timeout(1)
+        process = Process(name, ramOc, ramOc, env)
+        yield env.timeout(random.expovariate(1.0/INTERVAL))
 
 #Iniciar la simulación
 env.process(createProcess(env))
 env.run(until=50000000000000)
 
+# Calculate average and standard deviation of execution times
+average_time = np.mean(execution_times)
+std_deviation = np.std(execution_times)
 
-
+print(f"Tiempo promedio de ejecución: {average_time}")
+print(f"Desviación estándar de los tiempos de ejecución: {std_deviation}")
